@@ -17,6 +17,8 @@ ALLOWED_HOSTS = ["*"]
 API_ROOT_URL = config("API_ROOT_URL", default="http://localhost:8000")
 API_BASE_URL = config("API_BASE_URL", default=f"{API_ROOT_URL}/api")
 
+ELIPSE_INTERNAL_TOKEN = config("ELIPSE_INTERNAL_TOKEN", default="")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",

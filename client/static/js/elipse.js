@@ -27,6 +27,7 @@ window.elipseIrAModulo = function (url, camposB64) {
     // ── Config ───────────────────────────────────────────────
     const LS_HISTORIAL = 'elipse_historial_v1';
     const LS_MEMORIA   = 'elipse_memoria_v1';
+    const LS_VOZ       = 'elipse_voz_v1';
     const MAX_HISTORIAL = 40;   // mensajes guardados (20 intercambios)
     const MAX_MEMORIA   = 20;   // datos recordados
     const MAX_MEM_CHARS = 200;  // por dato, para no inflar el prompt
@@ -41,6 +42,9 @@ window.elipseIrAModulo = function (url, camposB64) {
     let historial = [];   // {role, content, html}
     let memoria = [];     // {id, texto, ts}
     let saltarAnim = null; // fn para terminar la animacion en curso de golpe
+    let vozActiva = false;  // boton de voz del encabezado (se recuerda en este navegador)
+    let audioActual = null; // <audio> reproduciendose ahora
+    let urlAudio = null;    // blob del audio actual (se libera al terminar)
 
     // ── Elementos ────────────────────────────────────────────
     const $ = (id) => document.getElementById(id);
@@ -52,6 +56,7 @@ window.elipseIrAModulo = function (url, camposB64) {
     const elMemList  = $('elipseMemList');
     const elMemCount = $('elipseMemCount');
     const elAdjuntarBtn = $("elipseAdjuntarBtn");
+    const elVozBtn = $('elipseVozBtn');
     const elAdjuntarInput = $("elipseAdjuntarInput");
 
     // ─────────────────────────────────────────────────────────
@@ -437,6 +442,7 @@ window.elipseIrAModulo = function (url, camposB64) {
     }
 
     function nuevaConversacion() {
+        detenerVoz();
         historial = [];
         guardarLS(LS_HISTORIAL, historial);
         elMensajes.innerHTML =
@@ -504,6 +510,50 @@ window.elipseIrAModulo = function (url, camposB64) {
     // Envio
     // ─────────────────────────────────────────────────────────
 
+    // ─────────────────────────────────────────────────────────
+    // Voz: el Engine genera el audio; aqui solo se pide y se reproduce.
+    // ─────────────────────────────────────────────────────────
+
+    function pintarVozBtn() {
+        if (!elVozBtn) return;
+        elVozBtn.textContent = vozActiva ? '🔊 Voz: encendida' : '🔇 Voz: apagada';
+        elVozBtn.setAttribute('aria-pressed', vozActiva ? 'true' : 'false');
+    }
+
+    function detenerVoz() {
+        if (audioActual) { try { audioActual.pause(); } catch (e) {} audioActual = null; }
+        if (urlAudio) { URL.revokeObjectURL(urlAudio); urlAudio = null; }
+    }
+
+    async function reproducirVoz(taskId) {
+        if (!cfg.urlVoz) return;
+        try {
+            const res = await fetch(cfg.urlVoz.replace('__ID__', encodeURIComponent(taskId)), { credentials: 'same-origin' });
+            if (res.status === 204) return;               // el Engine no genero audio para esta respuesta
+            if (!res.ok) { toast('🔇 No se pudo generar la voz.'); return; }
+            const blob = await res.blob();
+            detenerVoz();
+            urlAudio = URL.createObjectURL(blob);
+            audioActual = new Audio(urlAudio);
+            audioActual.addEventListener('ended', detenerVoz);
+            await audioActual.play();
+        } catch (e) {
+            // El navegador puede bloquear el sonido hasta que la persona interactúe con la página.
+            toast('🔇 El navegador bloqueó el audio. Haz clic en la página y vuelve a preguntar.');
+        }
+    }
+
+    if (elVozBtn) {
+        vozActiva = leerLS(LS_VOZ, false) === true;
+        pintarVozBtn();
+        elVozBtn.addEventListener('click', () => {
+            vozActiva = !vozActiva;
+            guardarLS(LS_VOZ, vozActiva);
+            if (!vozActiva) detenerVoz();
+            pintarVozBtn();
+        });
+    }
+
     function autoAlto() {
         elInput.style.height = 'auto';
         elInput.style.height = Math.min(elInput.scrollHeight, 152) + 'px';
@@ -537,6 +587,7 @@ window.elipseIrAModulo = function (url, camposB64) {
             return;
         }
 
+        detenerVoz();
         ocupado = true;
         elSend.disabled = true;
         const pensando = mostrarPensando();
@@ -549,6 +600,7 @@ window.elipseIrAModulo = function (url, camposB64) {
                     pregunta: txt,
                     historial: historial.slice(-6).map((m) => ({ role: m.role, content: m.content })),
                     memoria: memoria.map((m) => m.texto),
+                    voz: vozActiva,
                 }),
             });
             const data = await res.json();
@@ -560,6 +612,7 @@ window.elipseIrAModulo = function (url, camposB64) {
                 bajar();
             } else {
                 pensando.limpiar();
+                if (vozActiva && data.voz && data.task_id) reproducirVoz(data.task_id);  // en paralelo al texto
                 await escribirHTML(pensando.burbuja, data.html);
 
                 historial.push({ role: 'user', content: txt });

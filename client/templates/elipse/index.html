@@ -11,6 +11,9 @@
         <button type="button" class="elipse-headbtn" id="elipseMemBtn" title="Lo que Elipse recuerda de ti">
             🧠 Memoria <span class="elipse-headbtn__count" id="elipseMemCount">0</span>
         </button>
+        <button type="button" class="elipse-headbtn" id="elipseVozBtn" title="Que Elipse lea sus respuestas en voz alta" aria-pressed="false">
+            🔇 Voz: apagada
+        </button>
         <button type="button" class="elipse-headbtn" id="elipseNuevaBtn" title="Empezar de cero">
             ✚ Nueva conversación
         </button>
@@ -59,6 +62,7 @@
         csrf: "{{ csrf_token }}",
         urlChat: "{% url 'elipse:chat' %}",
         urlSugerencias: "{% url 'elipse:sugerencias' %}",
+        urlVoz: "{% url 'elipse:voz' task_id='__ID__' %}",
         nombreUsuario: "{{ usuario.nombre|default:'Tú'|escapejs }}"
     };
 </script>
